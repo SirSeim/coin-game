@@ -7,6 +7,14 @@
  *   - state()
  */
 
+const redis = require('redis');
+
+const client = redis.createClient();
+
+client.on('connect', () => {
+  console.log('connected');
+});
+
 const { clamp, randomPoint, permutation } = require('./gameutil');
 
 const WIDTH = 64;
