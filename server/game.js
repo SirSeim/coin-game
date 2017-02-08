@@ -55,10 +55,14 @@ exports.addPlayer = (name) => {
 };
 
 function placeCoins() {
+  const coins = [];
   permutation(WIDTH * HEIGHT).slice(0, NUM_COINS).forEach((position, i) => {
     const coinValue = (i < 50) ? 1 : (i < 75) ? 2 : (i < 95) ? 5 : 10;
     const index = `${Math.floor(position / WIDTH)},${Math.floor(position % WIDTH)}`;
-    database.coins[index] = coinValue;
+    coins.push(`${index}:${coinValue}`);
+  });
+  client.sadd('coins', coins, (err, res) => {
+    console.log(res);
   });
 }
 
