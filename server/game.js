@@ -55,13 +55,23 @@ exports.addPlayer = (name) => {
 };
 
 function placeCoins() {
-  const coins = [];
+  const coinsPosition = [];
+  const coinsValue = [];
   permutation(WIDTH * HEIGHT).slice(0, NUM_COINS).forEach((position, i) => {
     const coinValue = (i < 50) ? 1 : (i < 75) ? 2 : (i < 95) ? 5 : 10;
     const index = `${Math.floor(position / WIDTH)},${Math.floor(position % WIDTH)}`;
-    coins.push(`${index}:${coinValue}`);
+    coinsPosition.push(index);
+    coinsValue.push(coinValue);
   });
-  client.sadd('coins', coins, (err, res) => {
+  const multiSubmit = client.multi();
+  coinsPosition.forEach((value) => {
+    multiSubmit.lpush('coinsPosition', value);
+  });
+  coinsValue.forEach((value) => {
+    multiSubmit.lpush('coinsValue', value);
+  });
+  multiSubmit.exec((err, res) => {
+    console.log(err);
     console.log(res);
   });
 }
