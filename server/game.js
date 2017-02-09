@@ -44,35 +44,37 @@ const database = {
   coins: {},
 };
 
-exports.addPlayer = (name) => {
-  if (name.length === 0 || name.length > MAX_PLAYER_NAME_LENGTH || database.usednames.has(name)) {
-    return false;
-  }
-  database.usednames.add(name);
-  database[`player:${name}`] = randomPoint(WIDTH, HEIGHT).toString();
-  database.scores[name] = 0;
-  return true;
+exports.addPlayer = (name, callback) => {
+  client.sismember('usednames', name, (err, res) => {
+    if (err) { return callback(err); }
+    console.log(res);
+    if (name.length === 0 || name.length > MAX_PLAYER_NAME_LENGTH || res) {
+      return callback(null, false);
+    }
+    const multiSubmit = client.multi();
+    multiSubmit.sadd('usednames', name);
+    multiSubmit.set(`player:${name}`, randomPoint(WIDTH, HEIGHT).toString());
+    multiSubmit.zadd('scores', 0, name);
+    multiSubmit.exec((err, res) => {
+      if (err) { return callback(err); }
+      console.log(res);
+      return callback(null, !!res.reduce((sum, num) => sum && num));
+    });
+    return null;
+  });
 };
 
 function placeCoins() {
-  const coinsPosition = [];
-  const coinsValue = [];
-  permutation(WIDTH * HEIGHT).slice(0, NUM_COINS).forEach((position, i) => {
-    const coinValue = (i < 50) ? 1 : (i < 75) ? 2 : (i < 95) ? 5 : 10;
-    const index = `${Math.floor(position / WIDTH)},${Math.floor(position % WIDTH)}`;
-    coinsPosition.push(index);
-    coinsValue.push(coinValue);
-  });
-  const multiSubmit = client.multi();
-  coinsPosition.forEach((value) => {
-    multiSubmit.lpush('coinsPosition', value);
-  });
-  coinsValue.forEach((value) => {
-    multiSubmit.lpush('coinsValue', value);
-  });
-  multiSubmit.exec((err, res) => {
-    console.log(err);
-    console.log(res);
+  client.del('coins', (err) => {
+    console.log(err || 'coins cleared');
+
+    const multiSubmit = client.multi();
+    permutation(WIDTH * HEIGHT).slice(0, NUM_COINS).forEach((position, i) => {
+      const coinValue = (i < 50) ? 1 : (i < 75) ? 2 : (i < 95) ? 5 : 10;
+      const index = `${Math.floor(position / WIDTH)},${Math.floor(position % WIDTH)}`;
+      multiSubmit.hsetnx('coins', index, coinValue);
+    });
+    multiSubmit.exec((err, res) => console.log(err || res));
   });
 }
 
