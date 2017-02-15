@@ -98,20 +98,30 @@ exports.state = () => {
 exports.move = (direction, name) => {
   const delta = { U: [0, -1], R: [1, 0], D: [0, 1], L: [-1, 0] }[direction];
   if (delta) {
-    const playerKey = `player:${name}`;
-    const [x, y] = database[playerKey].split(',');
-    const [newX, newY] = [clamp(+x + delta[0], 0, WIDTH - 1), clamp(+y + delta[1], 0, HEIGHT - 1)];
-    const value = database.coins[`${newX},${newY}`];
-    if (value) {
-      database.scores[name] += value;
-      delete database.coins[`${newX},${newY}`];
-    }
-    database[playerKey] = `${newX},${newY}`;
-
-    // When all coins collected, generate a new batch.
-    if (Object.keys(database.coins).length === 0) {
-      placeCoins();
-    }
+    client.get(`player:${name}`, (err, res) => {
+      if (err) { return err; }
+      const [x, y] = res.split(',');
+      const [newX, newY] = [clamp(+x + delta[0], 0, WIDTH - 1), clamp(+y + delta[1], 0,
+        HEIGHT - 1)];
+      client.hget('coins', `${newX},${newY}`, (err, res) => {
+        if (err) { return err; }
+        if (res) {
+          client.zincrby('scores', res, name);
+          client.hdel('coins', `${newX},${newY}`);
+        }
+        client.set(`player:${name}`, `${newX},${newY}`);
+        // When all coins collected, generate a new batch.
+        client.hlen('coins', (err, res) => {
+          if (err) { return err; }
+          if (res === 0) {
+            placeCoins();
+          }
+          return null;
+        });
+        return null;
+      });
+      return null;
+    });
   }
 };
 
