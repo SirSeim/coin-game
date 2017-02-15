@@ -38,12 +38,6 @@ const NUM_COINS = 100;
 // coins            hash         { "<row>,<col>": coinvalue }
 // usednames        set          all used names, to check quickly if a name has been used
 //
-const database = {
-  scores: {},
-  usednames: new Set(),
-  coins: {},
-};
-
 exports.addPlayer = (name, callback) => {
   client.sismember('usednames', name, (err, res) => {
     if (err) { return callback(err); }
@@ -82,30 +76,33 @@ function placeCoins() {
 // the positions of each player, the scores, and the positions (and values) of each coin.
 // Note that we return the scores in sorted order, so the client just has to iteratively
 // walk through an array of name-score pairs and render them.
-exports.state = () => {
+
+exports.state = (callback) => {
+  const positions = {};
   client.keys('player:*', (err, names) => {
     if (err) { return err; }
-    client.mget(names, (err, positions) => {
+    client.mget(names, (err, values) => {
       if (err) { return err; }
+      names.forEach((name, index) => {
+        // TODO remove hardcoded 7
+        positions[name.substring(7)] = values[index];
+      });
+      console.log(positions);
+      client.zrevrange('scores', 0, -1, 'withscores', (err, scores) => {
+        client.hgetall('coins', (err, coins) => {
+          if (err) { return err; }
+          return callback(null, { positions, scores, coins });
+        });
+        return null;
+      });
+      return null;
     });
     return null;
   });
   return null;
-
-  const positions = Object.entries(database)
-    .filter(([key]) => key.startsWith('player:'))
-    .map(([key, value]) => [key.substring(7), value]);
-  console.log(positions);
-  const scores = Object.entries(database.scores);
-  scores.sort(([, v1], [, v2]) => v1 < v2);
-  return {
-    positions,
-    scores,
-    coins: database.coins,
-  };
 };
 
-exports.move = (direction, name) => {
+exports.move = (direction, name, callback) => {
   const delta = { U: [0, -1], R: [1, 0], D: [0, 1], L: [-1, 0] }[direction];
   if (delta) {
     client.get(`player:${name}`, (err, res) => {
@@ -125,6 +122,7 @@ exports.move = (direction, name) => {
           if (err) { return err; }
           if (res === 0) {
             placeCoins();
+            callback(null);
           }
           return null;
         });
