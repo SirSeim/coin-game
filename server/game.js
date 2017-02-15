@@ -83,9 +83,19 @@ function placeCoins() {
 // Note that we return the scores in sorted order, so the client just has to iteratively
 // walk through an array of name-score pairs and render them.
 exports.state = () => {
+  client.keys('player:*', (err, names) => {
+    if (err) { return err; }
+    client.mget(names, (err, positions) => {
+      if (err) { return err; }
+    });
+    return null;
+  });
+  return null;
+
   const positions = Object.entries(database)
     .filter(([key]) => key.startsWith('player:'))
     .map(([key, value]) => [key.substring(7), value]);
+  console.log(positions);
   const scores = Object.entries(database.scores);
   scores.sort(([, v1], [, v2]) => v1 < v2);
   return {
