@@ -41,7 +41,6 @@ const NUM_COINS = 100;
 exports.addPlayer = (name, callback) => {
   client.sismember('usednames', name, (err, res) => {
     if (err) { return callback(err); }
-    console.log(res);
     if (name.length === 0 || name.length > MAX_PLAYER_NAME_LENGTH || res) {
       return callback(null, false);
     }
@@ -51,7 +50,6 @@ exports.addPlayer = (name, callback) => {
     multiSubmit.zadd('scores', 0, name);
     multiSubmit.exec((err, res) => {
       if (err) { return callback(err); }
-      console.log(res);
       return callback(null, !!res.reduce((sum, num) => sum && num));
     });
     return null;
@@ -68,7 +66,7 @@ function placeCoins() {
       const index = `${Math.floor(position / WIDTH)},${Math.floor(position % WIDTH)}`;
       multiSubmit.hsetnx('coins', index, coinValue);
     });
-    multiSubmit.exec((err, res) => console.log(err || res));
+    multiSubmit.exec(err => console.log(err || 'coins added'));
   });
 }
 
@@ -80,17 +78,20 @@ function placeCoins() {
 exports.state = (callback) => {
   const positions = {};
   client.keys('player:*', (err, names) => {
-    if (err) { return err; }
+    if (err) { return callback(err); }
     client.mget(names, (err, values) => {
-      if (err) { return err; }
+      if (err) { return callback(err); }
       names.forEach((name, index) => {
         // TODO remove hardcoded 7
         positions[name.substring(7)] = values[index];
       });
-      console.log(positions);
-      client.zrevrange('scores', 0, -1, 'withscores', (err, scores) => {
+      client.zrevrange('scores', 0, -1, 'withscores', (err, rawScores) => {
+        const scores = [];
+        for (let i = 0; i < rawScores.length; i += 2) {
+          scores.push([rawScores[i], rawScores[i + 1]]);
+        }
         client.hgetall('coins', (err, coins) => {
-          if (err) { return err; }
+          if (err) { return callback(err); }
           return callback(null, { positions, scores, coins });
         });
         return null;
@@ -106,12 +107,12 @@ exports.move = (direction, name, callback) => {
   const delta = { U: [0, -1], R: [1, 0], D: [0, 1], L: [-1, 0] }[direction];
   if (delta) {
     client.get(`player:${name}`, (err, res) => {
-      if (err) { return err; }
+      if (err) { return callback(err); }
       const [x, y] = res.split(',');
       const [newX, newY] = [clamp(+x + delta[0], 0, WIDTH - 1), clamp(+y + delta[1], 0,
         HEIGHT - 1)];
       client.hget('coins', `${newX},${newY}`, (err, res) => {
-        if (err) { return err; }
+        if (err) { return callback(err); }
         if (res) {
           client.zincrby('scores', res, name);
           client.hdel('coins', `${newX},${newY}`);
@@ -119,12 +120,12 @@ exports.move = (direction, name, callback) => {
         client.set(`player:${name}`, `${newX},${newY}`);
         // When all coins collected, generate a new batch.
         client.hlen('coins', (err, res) => {
-          if (err) { return err; }
+          if (err) { return callback(err); }
           if (res === 0) {
             placeCoins();
-            callback(null);
+            return callback(null, true);
           }
-          return null;
+          return callback(null, true);
         });
         return null;
       });
